@@ -4,6 +4,16 @@
 
 This library is designed to construct and use large k/v stores to do super quick point-in-polygon queries. This isn't something that I haven't tried before in go but this time with a much cleaner index generation implementation. (which is all thats done currently) I still have to write the db interface that can work with some of the most used k/v stores. The actual point-in-polygon algorithm from here is dead simple. 
 
+### Benchmark Results
+
+The following benchmarks are done using only a pure go map and a relatively small key/value set for a geojson representing the 50 states in America. The results are pretty decent so far, but the real issue will be with much larger k/v stores.
+
+```
+goos: darwin
+goarch: amd64
+BenchmarkQuery-8        5000000           357 ns/op          32 B/op           2 allocs/op
+```
+
 ### Example Usage
 
 This example shows the index generation for a given polygon. The size of the actual index is huge so here we just print the first 100.
