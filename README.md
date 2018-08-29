@@ -14,7 +14,14 @@ goarch: amd64
 BenchmarkQuery-8        5000000           357 ns/op          32 B/op           2 allocs/op
 ```
 
-### Example Usage
+### Usage - High Level
+
+High level usage for creating entire indexes is pretty straight forward using the ```IndexFromGeoJSON(filename string, outfilename string, minp, maxp int, geojsonfield string) error``` function creates a large index that is dumped to a csv file. From the csv file it can either be read into a go map, used to create a boltdb, or put in your own custom k/v that implements a ```Get(key string) (string,bool)``` method.
+
+From there all that is required is to open the ```GeohashTree``` struct through the proper functions: ```OpenGeohashTreeCSV(filename string) (*GeohashTree, error) {
+```,```OpenGeohashTreeBoltDB(filename string) (*GeohashTree, error)```,```OpenCustomDB(db CustomDB) (*GeohashTree, error)``` after that just use the ```Query(pt []float64) (string,bool)``` to query the entire index!
+
+### Example Usage - Low Level
 
 This example shows the index generation for a given polygon. The size of the actual index is huge so here we just print the first 100.
 
