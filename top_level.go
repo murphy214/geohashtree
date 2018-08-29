@@ -10,13 +10,22 @@ import (
 var Bds = Extrema{N: 55.0, S: 10.0, W: -130.0, E: -70.0}
 
 type GeohashTree struct {
-	Type   string // current either map or boltdb
-	Map    map[string]string
-	Min    int
-	Max    int
-	Dummy  string
-	Bucket *bolt.Bucket
-	BoltDB *bolt.DB
+	Type      string // current either map or boltdb
+	Map       map[string]string
+	Min       int
+	Max       int
+	Dummy     string
+	Bucket    *bolt.Bucket
+	BoltDB    *bolt.DB
+	CustomDB  CustomDB
+	QueryBool bool
+}
+
+// a custing interface
+type CustomDB interface {
+	Get(string) (string, bool)
+	Put(string, string) error
+	Query([]float64) (string, bool)
 }
 
 // get function for different db types
@@ -27,6 +36,8 @@ func (tree *GeohashTree) Get(key string) (string, bool) {
 	} else if tree.Type == "boltdb" {
 		val := string(tree.Bucket.Get([]byte(key)))
 		return val, len(val) > 0
+	} else if tree.Type == "customdb" {
+		return tree.CustomDB.Get(key)
 	}
 
 	return "", false
@@ -34,6 +45,9 @@ func (tree *GeohashTree) Get(key string) (string, bool) {
 
 // queries the entire flat index
 func (tree *GeohashTree) Query(point []float64) (string, bool) {
+	if tree.QueryBool {
+		return tree.CustomDB.Query(point)
+	}
 	ghash := Geohash(point, tree.Max)
 	for i := tree.Min; i <= tree.Max; i++ {
 		val, boolval := tree.Get(ghash[:i])
@@ -71,10 +85,11 @@ func OpenGeohashTreeCSV(filename string) (*GeohashTree, error) {
 
 // opens a boltdb tree
 func OpenGeohashTreeBoltDB(filename string) (*GeohashTree, error) {
-	db, err := bolt.Open(filename, 0600, nil)
+	db, err := bolt.Open(filename, 0666, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return &GeohashTree{}, err
 	}
+
 	tx, err := db.Begin(false)
 	if err != nil {
 		return &GeohashTree{}, err
@@ -87,6 +102,29 @@ func OpenGeohashTreeBoltDB(filename string) (*GeohashTree, error) {
 		BoltDB: db,
 		Bucket: buck,
 	}
+	dummy, _ := tree.Get("dummy")
+	minstr, _ := tree.Get("min")
+	maxstr, _ := tree.Get("max")
+	mind, err := strconv.ParseInt(minstr, 10, 64)
+	if err != nil {
+		return &GeohashTree{}, err
+	}
+	maxd, err := strconv.ParseInt(maxstr, 10, 64)
+	if err != nil {
+		return &GeohashTree{}, err
+	}
+	tree.Max = int(maxd)
+	tree.Min = int(mind)
+	tree.Dummy = dummy
+	return tree, err
+}
+
+func OpenCustomDB(db CustomDB) (*GeohashTree, error) {
+	tree := &GeohashTree{
+		CustomDB: db,
+		Type:     "customdb",
+	}
+
 	dummy, _ := tree.Get("dummy")
 	minstr, _ := tree.Get("min")
 	maxstr, _ := tree.Get("max")

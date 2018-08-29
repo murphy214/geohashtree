@@ -31,7 +31,7 @@ func linecount(filename string) (int, error) {
 func SortCSV(filename string) error {
 	//cmd := exec.Command("sort", "-k", "1n", "-r", "-S", "5G", filename)
 	os.Remove("tmp.csv")
-	cmd := "(head -n 2 a.csv && tail -n +3 a.csv | sort -k 1n -S 5g) >> tmp.csv"
+	cmd := fmt.Sprintf("(head -n 2 %s && tail -n +3 %s | LC_ALL=C sort -k 1n -S 2g --check) >> tmp.csv", filename, filename)
 	_, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
 		return err
@@ -156,6 +156,56 @@ func CreateBoltDB(filename string, outfilename string) error {
 	if len(newlist) > 0 {
 		fmt.Printf("\r[%d/%d] Inserting k/v into %s...", currentline, lc, outfilename)
 		err := db.Update(updatedb)
+		if err != nil {
+			return err
+		}
+
+	}
+	return err
+}
+
+// creates a bolt db database from a flat csv file
+func CreateCustomDB(filename string, customdb CustomDB) error {
+	// geting line count
+	lc, err := linecount(filename)
+	if err != nil {
+		return err
+	}
+
+	// opening scanner file
+	scanner, _ := NewScannerFile(filename)
+	newlist := [][]string{}
+
+	updatedb := func() error {
+		for _, i := range newlist {
+			err := customdb.Put(i[0], i[1])
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// scanning through each k/v
+	currentline := 0
+	for scanner.Next() {
+		k, v := scanner.KeyValue()
+		newlist = append(newlist, []string{k, v})
+		// updating db when 100k k/v's are buffered.
+		if len(newlist) == 100000 {
+			fmt.Printf("\r[%d/%d] Inserting k/v into %s...", currentline, lc, "RedisDB")
+			err := updatedb()
+			if err != nil {
+				return err
+			}
+			newlist = [][]string{}
+		}
+		currentline++
+	}
+	// adding the final remaining newlist if needed
+	if len(newlist) > 0 {
+		fmt.Printf("\r[%d/%d] Inserting k/v into %s...", currentline, lc, "RedisDB")
+		err := updatedb()
 		if err != nil {
 			return err
 		}
